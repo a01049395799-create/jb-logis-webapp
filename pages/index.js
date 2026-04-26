@@ -8,6 +8,28 @@ const supabase = createClient(
 
 export default function Home() {
   const [msg, setMsg] = useState('');
+  const [drivers, setDrivers] = useState([]);
+  const [shippers, setShippers] = useState([]);
+
+  const loadData = async () => {
+    const { data: driverData, error: driverError } = await supabase
+      .from('drivers')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    const { data: shipperData, error: shipperError } = await supabase
+      .from('shippers')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (driverError || shipperError) {
+      setMsg('목록 불러오기 실패');
+    } else {
+      setDrivers(driverData || []);
+      setShippers(shipperData || []);
+      setMsg('목록 불러오기 성공');
+    }
+  };
 
   const addDriver = async (e) => {
     e.preventDefault();
@@ -27,6 +49,7 @@ export default function Home() {
     } else {
       setMsg('기사 등록 성공');
       f.reset();
+      loadData();
     }
   };
 
@@ -48,6 +71,7 @@ export default function Home() {
     } else {
       setMsg('화주 문의 성공');
       f.reset();
+      loadData();
     }
   };
 
@@ -67,6 +91,8 @@ export default function Home() {
         <button type="submit">기사 등록 신청</button>
       </form>
 
+      <hr />
+
       <h2>화주 견적문의</h2>
       <form onSubmit={addShipper}>
         <input name="company" placeholder="업체명" /><br /><br />
@@ -75,6 +101,25 @@ export default function Home() {
         <input name="drop" placeholder="하차지" /><br /><br />
         <button type="submit">견적 문의 접수</button>
       </form>
+
+      <hr />
+
+      <h2>관리자 조회</h2>
+      <button onClick={loadData}>기사/화주 목록 새로고침</button>
+
+      <h3>등록 기사 목록</h3>
+      {drivers.map((d) => (
+        <div key={d.id} style={{ borderBottom: '1px solid #ccc', padding: '8px 0' }}>
+          {d.name} / {d.phone} / {d.vehicle} / {d.area}
+        </div>
+      ))}
+
+      <h3>화주 문의 목록</h3>
+      {shippers.map((s) => (
+        <div key={s.id} style={{ borderBottom: '1px solid #ccc', padding: '8px 0' }}>
+          {s.company} / {s.phone} / {s.pickup} → {s.dropoff}
+        </div>
+      ))}
     </div>
   );
 }
