@@ -7,123 +7,137 @@ const supabase = createClient(
 );
 
 export default function Home() {
-  const [orders, setOrders] = useState([]);
-  const [myName, setMyName] = useState('');
-  const [inputName, setInputName] = useState('');
-  const [mode, setMode] = useState('driver'); // driver / shipper
+  const [mode, setMode] = useState('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [role, setRole] = useState('driver');
 
-  const loadData = async () => {
-    const { data } = await supabase.from('shippers').select('*');
-    setOrders(data || []);
-  };
+  const [agree1, setAgree1] = useState(false);
+  const [agree2, setAgree2] = useState(false);
+  const [agree3, setAgree3] = useState(false);
+
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
-    loadData();
-
-    const ch = supabase
-      .channel('rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shippers' }, loadData)
-      .subscribe();
-
-    return () => supabase.removeChannel(ch);
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+    });
   }, []);
 
-  const login = () => {
-    if (!inputName) return alert('이름 입력');
-    setMyName(inputName);
+  // 회원가입
+  const signUp = async () => {
+    if (!agree1 || !agree2 || !agree3) {
+      return alert('모든 동의 체크 필요');
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password
+    });
+
+    if (error) return alert(error.message);
+
+    await supabase.from('profiles').insert([{
+      id: data.user.id,
+      email,
+      name,
+      phone,
+      role,
+      agree_privacy: agree1,
+      agree_location: agree2,
+      agree_terms: agree3
+    }]);
+
+    alert('회원가입 완료');
+    setMode('login');
   };
 
-  const takeOrder = async (orderId) => {
-    await supabase
-      .from('shippers')
-      .update({
-        assigned_driver: myName,
-        status: '배차완료'
-      })
-      .eq('id', orderId)
-      .eq('status', '배차대기');
+  // 로그인
+  const login = async () => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
 
-    loadData();
+    if (error) alert(error.message);
+    else location.reload();
   };
 
-  const updateStatus = async (id, status) => {
-    await supabase
-      .from('shippers')
-      .update({ status })
-      .eq('id', id);
-
-    loadData();
+  // 로그아웃
+  const logout = async () => {
+    await supabase.auth.signOut();
+    location.reload();
   };
 
+  // 로그인 후 프로필 조회
+  const [profile, setProfile] = useState(null);
+
+  useEffect(() => {
+    if (user) {
+      supabase.from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => setProfile(data));
+    }
+  }, [user]);
+
+  // ======================
+  // 🔐 로그인 안된 화면
+  // ======================
+  if (!user) {
+    return (
+      <div style={{ padding: 30, textAlign: 'center' }}>
+        <h1>JB LOGIS</h1>
+        <p>전국 어디든 빠르고 정확한 운송 플랫폼</p>
+
+        {mode === 'login' ? (
+          <>
+            <h2>로그인</h2>
+            <input placeholder="이메일" onChange={e => setEmail(e.target.value)} /><br /><br />
+            <input type="password" placeholder="비밀번호" onChange={e => setPassword(e.target.value)} /><br /><br />
+            <button onClick={login}>로그인</button><br /><br />
+            <button onClick={() => setMode('signup')}>회원가입</button>
+          </>
+        ) : (
+          <>
+            <h2>회원가입</h2>
+
+            <input placeholder="이름" onChange={e => setName(e.target.value)} /><br /><br />
+            <input placeholder="연락처" onChange={e => setPhone(e.target.value)} /><br /><br />
+            <input placeholder="이메일" onChange={e => setEmail(e.target.value)} /><br /><br />
+            <input type="password" placeholder="비밀번호" onChange={e => setPassword(e.target.value)} /><br /><br />
+
+            <select onChange={e => setRole(e.target.value)}>
+              <option value="driver">기사</option>
+              <option value="shipper">화주</option>
+            </select><br /><br />
+
+            <label><input type="checkbox" onChange={e => setAgree1(e.target.checked)} /> 개인정보 동의</label><br />
+            <label><input type="checkbox" onChange={e => setAgree2(e.target.checked)} /> 위치정보 동의</label><br />
+            <label><input type="checkbox" onChange={e => setAgree3(e.target.checked)} /> 약관 동의</label><br /><br />
+
+            <button onClick={signUp}>가입하기</button><br /><br />
+            <button onClick={() => setMode('login')}>로그인으로</button>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // ======================
+  // 로그인 후 화면
+  // ======================
   return (
     <div style={{ padding: 20 }}>
-      <h1>JB LOGIS</h1>
+      <h2>환영합니다 {profile?.name}</h2>
+      <p>역할: {profile?.role === 'driver' ? '기사' : '화주'}</p>
+      <button onClick={logout}>로그아웃</button>
 
-      <button onClick={() => setMode('driver')}>기사모드</button>
-      <button onClick={() => setMode('shipper')} style={{ marginLeft: 10 }}>
-        화주모드
-      </button>
-
-      {!myName && (
-        <div>
-          <input
-            placeholder="이름 입력"
-            value={inputName}
-            onChange={(e) => setInputName(e.target.value)}
-          />
-          <button onClick={login}>로그인</button>
-        </div>
-      )}
-
-      {/* 기사 모드 */}
-      {mode === 'driver' && myName && (
-        <div>
-          <h3>{myName} 기사님</h3>
-
-          <h2>배차 가능한 오더</h2>
-          {orders
-            .filter(o => o.status === '배차대기')
-            .map(o => (
-              <div key={o.id} style={{ border: '1px solid #ccc', margin: 10, padding: 10 }}>
-                {o.company} / {o.pickup} → {o.dropoff}
-                <br />
-                <button onClick={() => takeOrder(o.id)}>배차받기</button>
-              </div>
-            ))}
-
-          <h2>내 배차</h2>
-          {orders
-            .filter(o => o.assigned_driver === myName)
-            .map(o => (
-              <div key={o.id} style={{ border: '1px solid green', margin: 10, padding: 10 }}>
-                {o.company} / {o.pickup} → {o.dropoff}
-                <br />
-                상태: {o.status}
-                <br />
-                <button onClick={() => updateStatus(o.id, '운행중')}>운행중</button>
-                <button onClick={() => updateStatus(o.id, '하차완료')}>하차완료</button>
-                <button onClick={() => updateStatus(o.id, '배차취소')}>취소</button>
-              </div>
-            ))}
-        </div>
-      )}
-
-      {/* 화주 모드 */}
-      {mode === 'shipper' && (
-        <div>
-          <h2>화주 오더 조회</h2>
-
-          {orders.map(o => (
-            <div key={o.id} style={{ border: '1px solid #ccc', margin: 10, padding: 10 }}>
-              {o.company} / {o.pickup} → {o.dropoff}
-              <br />
-              상태: {o.status}
-              <br />
-              기사: {o.assigned_driver || '미배차'}
-            </div>
-          ))}
-        </div>
-      )}
+      {profile?.role === 'driver' && <h3>👉 기사 화면 (다음 단계에서 연결)</h3>}
+      {profile?.role === 'shipper' && <h3>👉 화주 화면 (다음 단계에서 연결)</h3>}
     </div>
   );
 }
