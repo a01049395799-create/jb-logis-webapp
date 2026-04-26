@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  'https://ijuxtimblcengcoltcxe.supabase.co',
+  'sb_publishable_S4AOBjTFbVE4FMXtjJWFdw_EO7S0ZV-'
 );
 
 export default function Home() {
