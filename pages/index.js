@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -12,24 +12,41 @@ export default function Home() {
   const [shippers, setShippers] = useState([]);
 
   const loadData = async () => {
-    const { data: driverData, error: driverError } = await supabase
+    const { data: driverData } = await supabase
       .from('drivers')
       .select('*')
       .order('created_at', { ascending: false });
 
-    const { data: shipperData, error: shipperError } = await supabase
+    const { data: shipperData } = await supabase
       .from('shippers')
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (driverError || shipperError) {
-      setMsg('목록 불러오기 실패');
-    } else {
-      setDrivers(driverData || []);
-      setShippers(shipperData || []);
-      setMsg('목록 불러오기 성공');
-    }
+    setDrivers(driverData || []);
+    setShippers(shipperData || []);
   };
+
+  useEffect(() => {
+    loadData();
+
+    const channel = supabase
+      .channel('realtime-update')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'drivers' },
+        () => loadData()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'shippers' },
+        () => loadData()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const addDriver = async (e) => {
     e.preventDefault();
@@ -49,7 +66,6 @@ export default function Home() {
     } else {
       setMsg('기사 등록 성공');
       f.reset();
-      loadData();
     }
   };
 
@@ -71,7 +87,6 @@ export default function Home() {
     } else {
       setMsg('화주 문의 성공');
       f.reset();
-      loadData();
     }
   };
 
@@ -104,8 +119,7 @@ export default function Home() {
 
       <hr />
 
-      <h2>관리자 조회</h2>
-      <button onClick={loadData}>기사/화주 목록 새로고침</button>
+      <h2>관리자 실시간 조회</h2>
 
       <h3>등록 기사 목록</h3>
       {drivers.map((d) => (
