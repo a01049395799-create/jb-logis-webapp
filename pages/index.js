@@ -6,9 +6,30 @@ const supabase = createClient(
   'sb_publishable_S4AOBjTFbVE4FMXtjJWFdw_EO7S0ZV-'
 );
 
+const styles = {
+  page: { minHeight: '100vh', background: '#f3f6fb', fontFamily: 'Arial, sans-serif', color: '#172033' },
+  header: { background: '#0f2747', color: 'white', padding: '28px 22px', borderRadius: '0 0 28px 28px' },
+  logo: { fontSize: 34, fontWeight: 800, marginBottom: 6 },
+  slogan: { fontSize: 15, opacity: 0.9 },
+  wrap: { maxWidth: 980, margin: '0 auto', padding: 20 },
+  card: { background: 'white', borderRadius: 20, padding: 22, margin: '18px 0', boxShadow: '0 8px 24px rgba(15,39,71,0.08)' },
+  input: { width: '100%', padding: 14, borderRadius: 12, border: '1px solid #d8dee9', marginBottom: 12, fontSize: 15, boxSizing: 'border-box' },
+  select: { width: '100%', padding: 14, borderRadius: 12, border: '1px solid #d8dee9', marginBottom: 12, fontSize: 15 },
+  btn: { background: '#0f62fe', color: 'white', border: 0, padding: '13px 18px', borderRadius: 12, fontWeight: 700, cursor: 'pointer', marginRight: 8, marginTop: 6 },
+  btnDark: { background: '#0f2747', color: 'white', border: 0, padding: '13px 18px', borderRadius: 12, fontWeight: 700, cursor: 'pointer', marginRight: 8, marginTop: 6 },
+  btnGreen: { background: '#178a43', color: 'white', border: 0, padding: '12px 16px', borderRadius: 12, fontWeight: 700, cursor: 'pointer', marginRight: 8, marginTop: 8 },
+  btnRed: { background: '#d93025', color: 'white', border: 0, padding: '12px 16px', borderRadius: 12, fontWeight: 700, cursor: 'pointer', marginRight: 8, marginTop: 8 },
+  badge: { display: 'inline-block', padding: '6px 10px', borderRadius: 999, background: '#e8f1ff', color: '#0f62fe', fontWeight: 700, fontSize: 13 },
+  title: { fontSize: 22, fontWeight: 800, marginBottom: 14 },
+  money: { fontSize: 20, fontWeight: 800, color: '#178a43' },
+  small: { color: '#697386', fontSize: 14 },
+  grid: { display: 'grid', gridTemplateColumns: '1fr', gap: 14 }
+};
+
 export default function Home() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [mode, setMode] = useState('login');
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,76 +38,61 @@ export default function Home() {
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState('driver');
 
-  const [mode, setMode] = useState('login');
-
   const [orders, setOrders] = useState([]);
-
   const [pickup, setPickup] = useState('');
   const [dropoff, setDropoff] = useState('');
   const [price, setPrice] = useState('');
 
-  // 로그인 상태 확인
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user);
-    });
-  }, []);
-
-  // 프로필 불러오기
-  useEffect(() => {
-    if (user) {
-      supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle()
-        .then(({ data }) => {
-          setProfile(data || null);
-        });
-    }
-  }, [user]);
-
-  // 오더 불러오기
-  const loadOrders = async () => {
-    const { data } = await supabase.from('shippers').select('*');
-    setOrders(data || []);
-  };
-
-  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUser(data.user));
     loadOrders();
   }, []);
 
-  // 회원가입
+  useEffect(() => {
+    if (user) loadProfile();
+  }, [user]);
+
+  const loadProfile = async () => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    setProfile(data || null);
+  };
+
+  const loadOrders = async () => {
+    const { data } = await supabase
+      .from('shippers')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    setOrders(data || []);
+  };
+
   const signUp = async () => {
     const { error } = await supabase.auth.signUp({ email, password });
     if (error) return alert(error.message);
-
-    alert('회원가입 완료 후 로그인하세요');
+    alert('회원가입 완료. 로그인해주세요.');
     setMode('login');
   };
 
-  // 로그인
   const login = async () => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-
-    if (error) alert(error.message);
-    else location.reload();
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return alert(error.message);
+    location.reload();
   };
 
-  // 로그아웃
   const logout = async () => {
     await supabase.auth.signOut();
     location.reload();
   };
 
-  // 🔥 프로필 생성 (핵심)
   const createProfile = async () => {
-    if (!name || !phone) return alert('정보 입력');
+    if (!name || !phone) return alert('이름과 연락처를 입력해주세요.');
 
-    await supabase.from('profiles').insert([{
+    const { error } = await supabase.from('profiles').insert([{
       id: user.id,
       email: user.email,
       name,
@@ -94,18 +100,21 @@ export default function Home() {
       role
     }]);
 
+    if (error) return alert('프로필 생성 실패: ' + error.message);
     alert('프로필 생성 완료');
     location.reload();
   };
 
-  // 🔥 화주 오더 등록
   const createOrder = async () => {
     const priceNum = Number(price);
+    if (!pickup || !dropoff || !priceNum) return alert('상차지, 하차지, 운임을 입력해주세요.');
+
     const fee = Math.floor(priceNum * 0.05);
     const driverAmount = priceNum - fee;
 
-    await supabase.from('shippers').insert([{
+    const { error } = await supabase.from('shippers').insert([{
       company: profile.name,
+      phone: profile.phone,
       pickup,
       dropoff,
       price: priceNum,
@@ -114,129 +123,174 @@ export default function Home() {
       status: '배차대기'
     }]);
 
+    if (error) return alert('오더 등록 실패: ' + error.message);
+
+    alert('운송 요청이 등록되었습니다.');
+    setPickup('');
+    setDropoff('');
+    setPrice('');
     loadOrders();
   };
 
-  // 🔥 배차
   const takeOrder = async (id) => {
-    await supabase.from('shippers')
-      .update({
-        assigned_driver: profile.name,
-        status: '배차완료'
-      })
+    const { error } = await supabase.from('shippers')
+      .update({ assigned_driver: profile.name, status: '배차완료' })
       .eq('id', id)
       .eq('status', '배차대기');
 
+    if (error) return alert('배차 실패: ' + error.message);
+    alert('배차를 받았습니다.');
     loadOrders();
   };
 
-  // 상태 변경
   const updateStatus = async (id, status) => {
-    await supabase.from('shippers')
+    const { error } = await supabase.from('shippers')
       .update({ status })
       .eq('id', id);
 
+    if (error) return alert('상태 변경 실패: ' + error.message);
     loadOrders();
   };
 
-  // =====================
-  // 로그인 화면
-  // =====================
+  const fmt = (n) => n ? Number(n).toLocaleString() + '원' : '-';
+
   if (!user) {
     return (
-      <div style={{ padding: 30, textAlign: 'center' }}>
-        <h1>JB LOGIS</h1>
+      <div style={styles.page}>
+        <div style={styles.header}>
+          <div style={styles.logo}>JB LOGIS</div>
+          <div style={styles.slogan}>전국 어디든 빠르고 정확한 배차</div>
+        </div>
 
-        {mode === 'login' ? (
-          <>
-            <input placeholder="이메일" onChange={e => setEmail(e.target.value)} /><br/><br/>
-            <input type="password" placeholder="비밀번호" onChange={e => setPassword(e.target.value)} /><br/><br/>
-            <button onClick={login}>로그인</button><br/><br/>
-            <button onClick={() => setMode('signup')}>회원가입</button>
-          </>
-        ) : (
-          <>
-            <input placeholder="이메일" onChange={e => setEmail(e.target.value)} /><br/><br/>
-            <input type="password" placeholder="비밀번호" onChange={e => setPassword(e.target.value)} /><br/><br/>
-            <button onClick={signUp}>가입하기</button><br/><br/>
-            <button onClick={() => setMode('login')}>로그인으로</button>
-          </>
-        )}
+        <div style={styles.wrap}>
+          <div style={styles.card}>
+            <div style={styles.title}>{mode === 'login' ? '로그인' : '회원가입'}</div>
+
+            <input style={styles.input} placeholder="이메일" onChange={e => setEmail(e.target.value)} />
+            <input style={styles.input} type="password" placeholder="비밀번호" onChange={e => setPassword(e.target.value)} />
+
+            {mode === 'signup' && (
+              <p style={styles.small}>회원가입 후 로그인하면 프로필 설정 화면에서 기사/화주 정보를 입력합니다.</p>
+            )}
+
+            {mode === 'login' ? (
+              <>
+                <button style={styles.btn} onClick={login}>로그인</button>
+                <button style={styles.btnDark} onClick={() => setMode('signup')}>회원가입</button>
+              </>
+            ) : (
+              <>
+                <button style={styles.btn} onClick={signUp}>가입하기</button>
+                <button style={styles.btnDark} onClick={() => setMode('login')}>로그인으로</button>
+              </>
+            )}
+          </div>
+        </div>
       </div>
     );
   }
 
-  // =====================
-  // 프로필 없음 → 생성 화면
-  // =====================
   if (!profile) {
     return (
-      <div style={{ padding: 30 }}>
-        <h2>프로필 설정</h2>
+      <div style={styles.page}>
+        <div style={styles.header}>
+          <div style={styles.logo}>JB LOGIS</div>
+          <div style={styles.slogan}>첫 이용을 위한 프로필 설정</div>
+        </div>
 
-        <input placeholder="이름" onChange={e => setName(e.target.value)} /><br/><br/>
-        <input placeholder="연락처" onChange={e => setPhone(e.target.value)} /><br/><br/>
+        <div style={styles.wrap}>
+          <div style={styles.card}>
+            <div style={styles.title}>프로필 설정</div>
+            <input style={styles.input} placeholder="이름 또는 업체명" onChange={e => setName(e.target.value)} />
+            <input style={styles.input} placeholder="연락처" onChange={e => setPhone(e.target.value)} />
 
-        <select onChange={e => setRole(e.target.value)}>
-          <option value="driver">기사</option>
-          <option value="shipper">화주</option>
-        </select><br/><br/>
+            <select style={styles.select} onChange={e => setRole(e.target.value)}>
+              <option value="driver">기사</option>
+              <option value="shipper">화주</option>
+            </select>
 
-        <button onClick={createProfile}>프로필 생성</button>
-        <button onClick={logout} style={{ marginLeft: 10 }}>로그아웃</button>
+            <button style={styles.btn} onClick={createProfile}>프로필 생성</button>
+            <button style={styles.btnDark} onClick={logout}>로그아웃</button>
+          </div>
+        </div>
       </div>
     );
   }
 
-  // =====================
-  // 화주 화면
-  // =====================
   if (profile.role === 'shipper') {
     return (
-      <div style={{ padding: 20 }}>
-        <h2>화주 ({profile.name})</h2>
-        <button onClick={logout}>로그아웃</button>
+      <div style={styles.page}>
+        <div style={styles.header}>
+          <div style={styles.logo}>JB LOGIS</div>
+          <div style={styles.slogan}>{profile.name} 화주님 전용 화면</div>
+        </div>
 
-        <h3>운송 요청</h3>
-        <input placeholder="상차지" onChange={e => setPickup(e.target.value)} /><br/><br/>
-        <input placeholder="하차지" onChange={e => setDropoff(e.target.value)} /><br/><br/>
-        <input placeholder="운임" onChange={e => setPrice(e.target.value)} /><br/><br/>
-        <button onClick={createOrder}>요청</button>
+        <div style={styles.wrap}>
+          <button style={styles.btnDark} onClick={logout}>로그아웃</button>
 
-        <h3>내 오더</h3>
-        {orders.filter(o => o.company === profile.name).map(o => (
-          <div key={o.id}>
-            {o.pickup} → {o.dropoff} / {o.status}
+          <div style={styles.card}>
+            <div style={styles.title}>운송 요청하기</div>
+            <input style={styles.input} placeholder="상차지" value={pickup} onChange={e => setPickup(e.target.value)} />
+            <input style={styles.input} placeholder="하차지" value={dropoff} onChange={e => setDropoff(e.target.value)} />
+            <input style={styles.input} placeholder="총 운임" value={price} onChange={e => setPrice(e.target.value)} />
+            <button style={styles.btn} onClick={createOrder}>운송 요청 등록</button>
           </div>
-        ))}
+
+          <div style={styles.card}>
+            <div style={styles.title}>내 운송 요청 현황</div>
+            {orders.filter(o => o.company === profile.name).map(o => (
+              <div key={o.id} style={styles.card}>
+                <span style={styles.badge}>{o.status}</span><br /><br />
+                <b>{o.pickup} → {o.dropoff}</b><br />
+                총 운임: <b>{fmt(o.price)}</b><br />
+                배정 기사: {o.assigned_driver || '미배차'}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
 
-  // =====================
-  // 기사 화면
-  // =====================
   return (
-    <div style={{ padding: 20 }}>
-      <h2>기사 ({profile.name})</h2>
-      <button onClick={logout}>로그아웃</button>
+    <div style={styles.page}>
+      <div style={styles.header}>
+        <div style={styles.logo}>JB LOGIS</div>
+        <div style={styles.slogan}>{profile.name} 기사님 전용 화면</div>
+      </div>
 
-      <h3>배차 가능한 오더</h3>
-      {orders.filter(o => o.status === '배차대기').map(o => (
-        <div key={o.id}>
-          {o.pickup} → {o.dropoff}
-          <button onClick={() => takeOrder(o.id)}>배차</button>
-        </div>
-      ))}
+      <div style={styles.wrap}>
+        <button style={styles.btnDark} onClick={logout}>로그아웃</button>
 
-      <h3>내 배차</h3>
-      {orders.filter(o => o.assigned_driver === profile.name).map(o => (
-        <div key={o.id}>
-          {o.pickup} → {o.dropoff} / {o.status}
-          <button onClick={() => updateStatus(o.id, '운행중')}>운행중</button>
-          <button onClick={() => updateStatus(o.id, '하차완료')}>완료</button>
+        <div style={styles.card}>
+          <div style={styles.title}>배차 가능한 오더</div>
+          {orders.filter(o => o.status === '배차대기').map(o => (
+            <div key={o.id} style={styles.card}>
+              <span style={styles.badge}>배차대기</span><br /><br />
+              <b>{o.pickup} → {o.dropoff}</b><br />
+              총 운임: {fmt(o.price)}<br />
+              기사 정산 예정액: <span style={styles.money}>{fmt(o.driver_amount)}</span><br />
+              JB 수수료: {fmt(o.fee)}<br /><br />
+              <button style={styles.btnGreen} onClick={() => takeOrder(o.id)}>배차받기</button>
+            </div>
+          ))}
         </div>
-      ))}
+
+        <div style={styles.card}>
+          <div style={styles.title}>내 배차 현황</div>
+          {orders.filter(o => o.assigned_driver === profile.name).map(o => (
+            <div key={o.id} style={styles.card}>
+              <span style={styles.badge}>{o.status}</span><br /><br />
+              <b>{o.pickup} → {o.dropoff}</b><br />
+              기사 정산 예정액: <span style={styles.money}>{fmt(o.driver_amount)}</span><br /><br />
+
+              <button style={styles.btn} onClick={() => updateStatus(o.id, '운행중')}>운행중으로 변경</button>
+              <button style={styles.btnGreen} onClick={() => updateStatus(o.id, '하차완료')}>하차완료 처리</button>
+              <button style={styles.btnRed} onClick={() => updateStatus(o.id, '배차취소')}>배차취소</button>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
