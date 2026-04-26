@@ -46,10 +46,14 @@ export default function Home() {
       area: f.area.value
     }]);
 
-    if (error) setMsg('기사 등록 실패: ' + error.message);
-    else {
+    if (error) {
+      setMsg('기사 등록 실패: ' + error.message);
+      alert('기사 등록 실패: ' + error.message);
+    } else {
       setMsg('기사 등록 성공');
+      alert('기사 등록 성공');
       f.reset();
+      loadData();
     }
   };
 
@@ -64,17 +68,23 @@ export default function Home() {
       dropoff: f.drop.value
     }]);
 
-    if (error) setMsg('화주 문의 실패: ' + error.message);
-    else {
+    if (error) {
+      setMsg('화주 문의 실패: ' + error.message);
+      alert('화주 문의 실패: ' + error.message);
+    } else {
       setMsg('화주 문의 성공');
+      alert('화주 문의 성공');
       f.reset();
+      loadData();
     }
   };
 
   const assignDispatch = async (shipper, driverId) => {
     const driver = drivers.find((d) => String(d.id) === String(driverId));
+
     if (!driver) {
       setMsg('기사를 선택하세요');
+      alert('기사를 선택하세요');
       return;
     }
 
@@ -84,8 +94,14 @@ export default function Home() {
       driver: driver.name
     }]);
 
-    if (error) setMsg('배차 실패: ' + error.message);
-    else setMsg('배차 완료');
+    if (error) {
+      setMsg('배차 실패: ' + error.message);
+      alert('배차 실패: ' + error.message);
+    } else {
+      setMsg('배차 완료');
+      alert('배차 완료');
+      loadData();
+    }
   };
 
   return (
