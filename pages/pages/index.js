@@ -13,7 +13,7 @@ export default function Home() {
     e.preventDefault();
     const f = e.target;
 
-    const { data, error } = await supabase.from('drivers').insert([
+    const { error } = await supabase.from('drivers').insert([
       {
         name: f.name.value,
         phone: f.phone.value,
@@ -23,10 +23,8 @@ export default function Home() {
     ]);
 
     if (error) {
-      console.log(error);
       setMsg('기사 등록 실패: ' + error.message);
     } else {
-      console.log(data);
       setMsg('기사 등록 성공');
       f.reset();
     }
@@ -36,19 +34,18 @@ export default function Home() {
     e.preventDefault();
     const f = e.target;
 
-    const { data, error } = await supabase.from('shippers').insert([
+    const { error } = await supabase.from('shippers').insert([
       {
         company: f.company.value,
+        phone: f.phone.value,
         pickup: f.pickup.value,
         dropoff: f.drop.value
       }
     ]);
 
     if (error) {
-      console.log(error);
       setMsg('화주 문의 실패: ' + error.message);
     } else {
-      console.log(data);
       setMsg('화주 문의 성공');
       f.reset();
     }
@@ -73,6 +70,7 @@ export default function Home() {
       <h2>화주 견적문의</h2>
       <form onSubmit={addShipper}>
         <input name="company" placeholder="업체명" /><br /><br />
+        <input name="phone" placeholder="연락처" /><br /><br />
         <input name="pickup" placeholder="상차지" /><br /><br />
         <input name="drop" placeholder="하차지" /><br /><br />
         <button type="submit">견적 문의 접수</button>
