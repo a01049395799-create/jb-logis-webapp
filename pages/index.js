@@ -9,21 +9,21 @@ const supabase = createClient(
 const styles = {
   page: { minHeight: '100vh', background: '#f3f6fb', fontFamily: 'Arial, sans-serif', color: '#172033' },
   header: { background: '#0f2747', color: 'white', padding: '28px 22px', borderRadius: '0 0 28px 28px' },
-  logo: { fontSize: 34, fontWeight: 800, marginBottom: 6 },
-  slogan: { fontSize: 15, opacity: 0.9 },
+  logo: { fontSize: 34, fontWeight: 800 },
+  slogan: { fontSize: 15, opacity: 0.9, marginTop: 6 },
   wrap: { maxWidth: 980, margin: '0 auto', padding: 20 },
   card: { background: 'white', borderRadius: 20, padding: 22, margin: '18px 0', boxShadow: '0 8px 24px rgba(15,39,71,0.08)' },
   input: { width: '100%', padding: 14, borderRadius: 12, border: '1px solid #d8dee9', marginBottom: 12, fontSize: 15, boxSizing: 'border-box' },
   select: { width: '100%', padding: 14, borderRadius: 12, border: '1px solid #d8dee9', marginBottom: 12, fontSize: 15 },
-  btn: { background: '#0f62fe', color: 'white', border: 0, padding: '13px 18px', borderRadius: 12, fontWeight: 700, cursor: 'pointer', marginRight: 8, marginTop: 6 },
-  btnDark: { background: '#0f2747', color: 'white', border: 0, padding: '13px 18px', borderRadius: 12, fontWeight: 700, cursor: 'pointer', marginRight: 8, marginTop: 6 },
+  btn: { background: '#0f62fe', color: 'white', border: 0, padding: '12px 16px', borderRadius: 12, fontWeight: 700, cursor: 'pointer', marginRight: 8, marginTop: 8 },
+  btnDark: { background: '#0f2747', color: 'white', border: 0, padding: '12px 16px', borderRadius: 12, fontWeight: 700, cursor: 'pointer', marginRight: 8, marginTop: 8 },
   btnGreen: { background: '#178a43', color: 'white', border: 0, padding: '12px 16px', borderRadius: 12, fontWeight: 700, cursor: 'pointer', marginRight: 8, marginTop: 8 },
   btnRed: { background: '#d93025', color: 'white', border: 0, padding: '12px 16px', borderRadius: 12, fontWeight: 700, cursor: 'pointer', marginRight: 8, marginTop: 8 },
   badge: { display: 'inline-block', padding: '6px 10px', borderRadius: 999, background: '#e8f1ff', color: '#0f62fe', fontWeight: 700, fontSize: 13 },
   title: { fontSize: 22, fontWeight: 800, marginBottom: 14 },
-  money: { fontSize: 20, fontWeight: 800, color: '#178a43' },
-  small: { color: '#697386', fontSize: 14 },
-  grid: { display: 'grid', gridTemplateColumns: '1fr', gap: 14 }
+  money: { fontSize: 30, fontWeight: 900, color: '#178a43', marginBottom: 8 },
+  route: { fontSize: 18, fontWeight: 800, marginBottom: 8 },
+  small: { color: '#697386', fontSize: 14, lineHeight: 1.6 }
 };
 
 export default function Home() {
@@ -74,6 +74,7 @@ export default function Home() {
   const signUp = async () => {
     const { error } = await supabase.auth.signUp({ email, password });
     if (error) return alert(error.message);
+
     alert('회원가입 완료. 로그인해주세요.');
     setMode('login');
   };
@@ -81,6 +82,7 @@ export default function Home() {
   const login = async () => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return alert(error.message);
+
     location.reload();
   };
 
@@ -101,13 +103,17 @@ export default function Home() {
     }]);
 
     if (error) return alert('프로필 생성 실패: ' + error.message);
+
     alert('프로필 생성 완료');
     location.reload();
   };
 
   const createOrder = async () => {
     const priceNum = Number(price);
-    if (!pickup || !dropoff || !priceNum) return alert('상차지, 하차지, 운임을 입력해주세요.');
+
+    if (!pickup || !dropoff || !priceNum || priceNum <= 0) {
+      return alert('상차지, 하차지, 운임을 정확히 입력해주세요.');
+    }
 
     const fee = Math.floor(priceNum * 0.05);
     const driverAmount = priceNum - fee;
@@ -134,11 +140,15 @@ export default function Home() {
 
   const takeOrder = async (id) => {
     const { error } = await supabase.from('shippers')
-      .update({ assigned_driver: profile.name, status: '배차완료' })
+      .update({
+        assigned_driver: profile.name,
+        status: '배차완료'
+      })
       .eq('id', id)
       .eq('status', '배차대기');
 
     if (error) return alert('배차 실패: ' + error.message);
+
     alert('배차를 받았습니다.');
     loadOrders();
   };
@@ -149,10 +159,14 @@ export default function Home() {
       .eq('id', id);
 
     if (error) return alert('상태 변경 실패: ' + error.message);
+
     loadOrders();
   };
 
-  const fmt = (n) => n ? Number(n).toLocaleString() + '원' : '-';
+  const fmt = (n) => {
+    if (!n || Number(n) <= 0) return '-';
+    return Number(n).toLocaleString() + '원';
+  };
 
   if (!user) {
     return (
@@ -168,10 +182,6 @@ export default function Home() {
 
             <input style={styles.input} placeholder="이메일" onChange={e => setEmail(e.target.value)} />
             <input style={styles.input} type="password" placeholder="비밀번호" onChange={e => setPassword(e.target.value)} />
-
-            {mode === 'signup' && (
-              <p style={styles.small}>회원가입 후 로그인하면 프로필 설정 화면에서 기사/화주 정보를 입력합니다.</p>
-            )}
 
             {mode === 'login' ? (
               <>
@@ -201,6 +211,7 @@ export default function Home() {
         <div style={styles.wrap}>
           <div style={styles.card}>
             <div style={styles.title}>프로필 설정</div>
+
             <input style={styles.input} placeholder="이름 또는 업체명" onChange={e => setName(e.target.value)} />
             <input style={styles.input} placeholder="연락처" onChange={e => setPhone(e.target.value)} />
 
@@ -230,19 +241,29 @@ export default function Home() {
 
           <div style={styles.card}>
             <div style={styles.title}>운송 요청하기</div>
+
             <input style={styles.input} placeholder="상차지" value={pickup} onChange={e => setPickup(e.target.value)} />
             <input style={styles.input} placeholder="하차지" value={dropoff} onChange={e => setDropoff(e.target.value)} />
-            <input style={styles.input} placeholder="총 운임" value={price} onChange={e => setPrice(e.target.value)} />
+            <input style={styles.input} placeholder="총 운임 예: 300000" value={price} onChange={e => setPrice(e.target.value)} />
+
+            <p style={styles.small}>
+              결제 원칙: 화주는 JB LOGIS로 결제하고, JB LOGIS가 기사에게 정산합니다.<br />
+              배차 수수료는 총 운임의 5%입니다.
+            </p>
+
             <button style={styles.btn} onClick={createOrder}>운송 요청 등록</button>
           </div>
 
           <div style={styles.card}>
             <div style={styles.title}>내 운송 요청 현황</div>
+
             {orders.filter(o => o.company === profile.name).map(o => (
               <div key={o.id} style={styles.card}>
-                <span style={styles.badge}>{o.status}</span><br /><br />
-                <b>{o.pickup} → {o.dropoff}</b><br />
+                <span style={styles.badge}>{o.status || '배차대기'}</span><br /><br />
+                <div style={styles.route}>{o.pickup} → {o.dropoff}</div>
                 총 운임: <b>{fmt(o.price)}</b><br />
+                JB 수수료: {fmt(o.fee)}<br />
+                기사 정산 예정액: {fmt(o.driver_amount)}<br />
                 배정 기사: {o.assigned_driver || '미배차'}
               </div>
             ))}
@@ -264,29 +285,44 @@ export default function Home() {
 
         <div style={styles.card}>
           <div style={styles.title}>배차 가능한 오더</div>
+
           {orders.filter(o => o.status === '배차대기').map(o => (
             <div key={o.id} style={styles.card}>
               <span style={styles.badge}>배차대기</span><br /><br />
-              <b>{o.pickup} → {o.dropoff}</b><br />
-              총 운임: {fmt(o.price)}<br />
-              기사 정산 예정액: <span style={styles.money}>{fmt(o.driver_amount)}</span><br />
-              JB 수수료: {fmt(o.fee)}<br /><br />
-              <button style={styles.btnGreen} onClick={() => takeOrder(o.id)}>배차받기</button>
+
+              <div style={styles.money}>{fmt(o.driver_amount)}</div>
+              <div style={styles.route}>{o.pickup} → {o.dropoff}</div>
+
+              <div style={styles.small}>
+                총 운임: {fmt(o.price)}<br />
+                JB 수수료 5%: {fmt(o.fee)}
+              </div>
+
+              <button style={styles.btnGreen} onClick={() => takeOrder(o.id)}>
+                배차받기
+              </button>
             </div>
           ))}
         </div>
 
         <div style={styles.card}>
           <div style={styles.title}>내 배차 현황</div>
+
           {orders.filter(o => o.assigned_driver === profile.name).map(o => (
             <div key={o.id} style={styles.card}>
-              <span style={styles.badge}>{o.status}</span><br /><br />
-              <b>{o.pickup} → {o.dropoff}</b><br />
-              기사 정산 예정액: <span style={styles.money}>{fmt(o.driver_amount)}</span><br /><br />
+              <span style={styles.badge}>{o.status || '배차완료'}</span><br /><br />
 
-              <button style={styles.btn} onClick={() => updateStatus(o.id, '운행중')}>운행중으로 변경</button>
-              <button style={styles.btnGreen} onClick={() => updateStatus(o.id, '하차완료')}>하차완료 처리</button>
-              <button style={styles.btnRed} onClick={() => updateStatus(o.id, '배차취소')}>배차취소</button>
+              <div style={styles.money}>{fmt(o.driver_amount)}</div>
+              <div style={styles.route}>{o.pickup} → {o.dropoff}</div>
+
+              <div style={styles.small}>
+                총 운임: {fmt(o.price)}<br />
+                JB 수수료 5%: {fmt(o.fee)}
+              </div>
+
+              <button style={styles.btn} onClick={() => updateStatus(o.id, '운행중')}>운행중</button>
+              <button style={styles.btnGreen} onClick={() => updateStatus(o.id, '하차완료')}>완료</button>
+              <button style={styles.btnRed} onClick={() => updateStatus(o.id, '배차취소')}>취소</button>
             </div>
           ))}
         </div>
