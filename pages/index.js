@@ -24,15 +24,21 @@ const styles = {
   title:{fontSize:22,fontWeight:800,marginBottom:14},
   money:{fontSize:30,fontWeight:900,color:'#178a43',marginBottom:8},
   route:{fontSize:18,fontWeight:800,marginBottom:8},
-  small:{color:'#697386',fontSize:14,lineHeight:1.6}
+  small:{color:'#697386',fontSize:14,lineHeight:1.6},
+  unpaidBox:{background:'#ffe5e5',color:'#d93025',padding:14,borderRadius:14,fontWeight:900,margin:'12px 0'},
+  paidText:{color:'#178a43',fontWeight:900},
+  unpaidText:{color:'#d93025',fontWeight:900}
 };
 
 export default function Home() {
+  const today = new Date().toISOString().split('T')[0];
+
   const [user,setUser]=useState(null);
   const [profile,setProfile]=useState(null);
   const [orders,setOrders]=useState([]);
   const [mode,setMode]=useState('login');
   const [tab,setTab]=useState('main');
+  const [selectedDate,setSelectedDate]=useState(today);
 
   const [email,setEmail]=useState('');
   const [password,setPassword]=useState('');
@@ -65,6 +71,11 @@ export default function Home() {
   };
 
   const fmt=(n)=>!n?'0원':Number(n).toLocaleString()+'원';
+
+  const isSameDate=(o,date)=>{
+    if(!o.created_at) return false;
+    return o.created_at.startsWith(date);
+  };
 
   const calcSettlementDate=(terms)=>{
     const d=new Date();
@@ -131,7 +142,9 @@ export default function Home() {
 
     if(error) return alert('오더 등록 실패: '+error.message);
     alert('운송 요청 등록 완료');
-    setPickup(''); setDropoff(''); setPrice('');
+    setPickup('');
+    setDropoff('');
+    setPrice('');
     loadOrders();
   };
 
@@ -150,7 +163,12 @@ export default function Home() {
     if(status==='하차완료'){
       const due=calcSettlementDate(order.payment_terms);
       const {error}=await supabase.from('shippers')
-        .update({status:'하차완료',payment_status:'결제요청',settlement_due_date:due,settlement_status:'정산대기'})
+        .update({
+          status:'하차완료',
+          payment_status:'결제요청',
+          settlement_due_date:due,
+          settlement_status:'정산대기'
+        })
         .eq('id',order.id);
       if(error) return alert('상태 변경 실패: '+error.message);
     } else {
@@ -219,6 +237,9 @@ export default function Home() {
   }
 
   const myOrders=orders.filter(o=>o.assigned_driver===profile.name);
+  const datedMyOrders=myOrders.filter(o=>isSameDate(o,selectedDate));
+  const datedAllOrders=orders.filter(o=>isSameDate(o,selectedDate));
+
   const thisMonth=myOrders.filter(o=>{
     if(!o.created_at) return false;
     const d=new Date(o.created_at), now=new Date();
@@ -286,8 +307,12 @@ export default function Home() {
         <div style={styles.header}><div style={styles.logo}>JB LOGIS</div><div style={styles.slogan}>관리자 정산관리</div></div>
         <div style={styles.wrap}>
           <button style={styles.dark} onClick={logout}>로그아웃</button>
+          <div style={styles.card}>
+            <div style={styles.title}>조회 날짜</div>
+            <input style={styles.input} type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)} />
+          </div>
           <div style={styles.card}><div style={styles.title}>전체 오더 / 정산관리</div>
-          {orders.map(o=>(
+          {datedAllOrders.map(o=>(
             <div key={o.id} style={styles.card}>
               <b>{o.company}</b> / {o.pickup} → {o.dropoff}<br/>
               기사: {o.assigned_driver||'미배차'}<br/>
@@ -314,9 +339,15 @@ export default function Home() {
         <button style={styles.btn} onClick={()=>setTab('home')}>마이홈</button>
         <button style={styles.btn} onClick={()=>setTab('history')}>근무내역</button>
 
+        <div style={styles.card}>
+          <div style={styles.title}>조회 날짜</div>
+          <input style={styles.input} type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)} />
+        </div>
+
         {tab==='home'&&(
           <div style={styles.card}>
             <div style={styles.title}>기사 마이홈</div>
+            <div style={styles.unpaidBox}>총 미정산 금액: {fmt(unpaid)}</div>
             이번 달 운행 건수: <b>{monthCount}건</b><br/>
             이번 달 총 운임: <b>{fmt(monthTotal)}</b><br/>
             기사 정산 예정액: <b>{fmt(driverTotal)}</b><br/>
@@ -329,32 +360,42 @@ export default function Home() {
             정산대기: {countSettlement('정산대기')}건<br/>
             정산완료: {countSettlement('정산완료')}건<br/><br/>
             <b>정산예정일</b>
-            {thisMonth.map(o=>(
-              <div key={o.id} style={styles.card}>
-                {o.pickup} → {o.dropoff}<br/>
-                정산금: {fmt(o.driver_amount)}<br/>
-                결제조건: {o.payment_terms||'하차 후 즉시결제'}<br/>
-                결제상태: {o.payment_status||'미결제'}<br/>
-                정산상태: {o.settlement_status||'정산대기'}<br/>
-                정산예정일: {o.settlement_due_date||'하차완료 후 자동생성'}
-              </div>
-            ))}
+            {thisMonth.map(o=>{
+              const unpaidItem=o.settlement_status!=='정산완료';
+              return (
+                <div key={o.id} style={styles.card}>
+                  <div style={unpaidItem?styles.unpaidText:styles.paidText}>
+                    {unpaidItem?'❗ 미정산':'✔ 정산완료'} / {fmt(o.driver_amount)}
+                  </div>
+                  {o.pickup} → {o.dropoff}<br/>
+                  결제조건: {o.payment_terms||'하차 후 즉시결제'}<br/>
+                  결제상태: {o.payment_status||'미결제'}<br/>
+                  정산상태: {o.settlement_status||'정산대기'}<br/>
+                  정산예정일: {o.settlement_due_date||'하차완료 후 자동생성'}
+                </div>
+              );
+            })}
           </div>
         )}
 
         {tab==='history'&&(
           <div style={styles.card}>
             <div style={styles.title}>근무내역</div>
-            {myOrders.map(o=>(
-              <div key={o.id} style={styles.card}>
-                {o.pickup} → {o.dropoff}<br/>
-                금액: {fmt(o.driver_amount)}<br/>
-                상태: {o.status}<br/>
-                결제상태: {o.payment_status||'미결제'}<br/>
-                정산상태: {o.settlement_status||'정산대기'}<br/>
-                정산예정일: {o.settlement_due_date||'미정'}
-              </div>
-            ))}
+            {datedMyOrders.map(o=>{
+              const unpaidItem=o.settlement_status!=='정산완료';
+              return (
+                <div key={o.id} style={styles.card}>
+                  <div style={unpaidItem?styles.unpaidText:styles.paidText}>
+                    {unpaidItem?'❗ 미정산':'✔ 정산완료'} / {fmt(o.driver_amount)}
+                  </div>
+                  {o.pickup} → {o.dropoff}<br/>
+                  상태: {o.status}<br/>
+                  결제상태: {o.payment_status||'미결제'}<br/>
+                  정산상태: {o.settlement_status||'정산대기'}<br/>
+                  정산예정일: {o.settlement_due_date||'미정'}
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -375,22 +416,25 @@ export default function Home() {
 
             <div style={styles.card}>
               <div style={styles.title}>내 배차 현황</div>
-              {myOrders.map(o=>(
-                <div key={o.id} style={styles.card}>
-                  <span style={styles.badge}>{o.status||'배차완료'}</span><span style={styles.pay}>{o.payment_status||'미결제'}</span><br/><br/>
-                  <div style={styles.money}>{fmt(o.driver_amount)}</div>
-                  <div style={styles.route}>{o.pickup} → {o.dropoff}</div>
-                  <div style={styles.small}>
-                    총 운임: {fmt(o.price)}<br/>
-                    결제조건: {o.payment_terms||'하차 후 즉시결제'}<br/>
-                    정산상태: {o.settlement_status||'정산대기'}<br/>
-                    정산예정일: {o.settlement_due_date||'하차완료 후 자동생성'}
+              {datedMyOrders.map(o=>{
+                const unpaidItem=o.settlement_status!=='정산완료';
+                return (
+                  <div key={o.id} style={styles.card}>
+                    <span style={styles.badge}>{o.status||'배차완료'}</span><span style={styles.pay}>{o.payment_status||'미결제'}</span><br/><br/>
+                    <div style={unpaidItem?{...styles.money,color:'#d93025'}:styles.money}>{fmt(o.driver_amount)}</div>
+                    <div style={styles.route}>{o.pickup} → {o.dropoff}</div>
+                    <div style={styles.small}>
+                      총 운임: {fmt(o.price)}<br/>
+                      결제조건: {o.payment_terms||'하차 후 즉시결제'}<br/>
+                      정산상태: {o.settlement_status||'정산대기'}<br/>
+                      정산예정일: {o.settlement_due_date||'하차완료 후 자동생성'}
+                    </div>
+                    <button style={styles.btn} onClick={()=>updateStatus(o,'운행중')}>운행중</button>
+                    <button style={styles.green} onClick={()=>updateStatus(o,'하차완료')}>하차완료</button>
+                    <button style={styles.red} onClick={()=>updateStatus(o,'배차취소')}>취소</button>
                   </div>
-                  <button style={styles.btn} onClick={()=>updateStatus(o,'운행중')}>운행중</button>
-                  <button style={styles.green} onClick={()=>updateStatus(o,'하차완료')}>하차완료</button>
-                  <button style={styles.red} onClick={()=>updateStatus(o,'배차취소')}>취소</button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
