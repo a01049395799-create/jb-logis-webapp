@@ -20,6 +20,7 @@ const styles = {
   btnGreen: { background: '#178a43', color: 'white', border: 0, padding: '12px 16px', borderRadius: 12, fontWeight: 700, cursor: 'pointer', marginRight: 8, marginTop: 8 },
   btnRed: { background: '#d93025', color: 'white', border: 0, padding: '12px 16px', borderRadius: 12, fontWeight: 700, cursor: 'pointer', marginRight: 8, marginTop: 8 },
   badge: { display: 'inline-block', padding: '6px 10px', borderRadius: 999, background: '#e8f1ff', color: '#0f62fe', fontWeight: 700, fontSize: 13 },
+  payBadge: { display: 'inline-block', padding: '6px 10px', borderRadius: 999, background: '#e9f7ef', color: '#178a43', fontWeight: 700, fontSize: 13 },
   title: { fontSize: 22, fontWeight: 800, marginBottom: 14 },
   money: { fontSize: 30, fontWeight: 900, color: '#178a43', marginBottom: 8 },
   route: { fontSize: 18, fontWeight: 800, marginBottom: 8 },
@@ -126,7 +127,8 @@ export default function Home() {
       price: priceNum,
       fee,
       driver_amount: driverAmount,
-      status: '배차대기'
+      status: '배차대기',
+      payment_status: '결제대기'
     }]);
 
     if (error) return alert('오더 등록 실패: ' + error.message);
@@ -138,6 +140,26 @@ export default function Home() {
     loadOrders();
   };
 
+  const payOrder = async (id) => {
+    alert(`JB LOGIS 입금 계좌 안내
+
+국민은행 123-456-7890
+예금주: JB LOGIS
+
+입금 확인 후 결제완료로 처리됩니다.
+현재 테스트 버전에서는 버튼 클릭 시 결제완료로 변경됩니다.`);
+
+    const { error } = await supabase
+      .from('shippers')
+      .update({ payment_status: '결제완료' })
+      .eq('id', id);
+
+    if (error) return alert('결제 처리 실패: ' + error.message);
+
+    alert('결제완료 처리되었습니다.');
+    loadOrders();
+  };
+
   const takeOrder = async (id) => {
     const { error } = await supabase.from('shippers')
       .update({
@@ -145,7 +167,8 @@ export default function Home() {
         status: '배차완료'
       })
       .eq('id', id)
-      .eq('status', '배차대기');
+      .eq('status', '배차대기')
+      .eq('payment_status', '결제완료');
 
     if (error) return alert('배차 실패: ' + error.message);
 
@@ -259,12 +282,21 @@ export default function Home() {
 
             {orders.filter(o => o.company === profile.name).map(o => (
               <div key={o.id} style={styles.card}>
-                <span style={styles.badge}>{o.status || '배차대기'}</span><br /><br />
+                <span style={styles.badge}>{o.status || '배차대기'}</span>
+                <span style={{ marginLeft: 8 }}></span>
+                <span style={styles.payBadge}>{o.payment_status || '결제대기'}</span><br /><br />
+
                 <div style={styles.route}>{o.pickup} → {o.dropoff}</div>
                 총 운임: <b>{fmt(o.price)}</b><br />
                 JB 수수료: {fmt(o.fee)}<br />
                 기사 정산 예정액: {fmt(o.driver_amount)}<br />
-                배정 기사: {o.assigned_driver || '미배차'}
+                배정 기사: {o.assigned_driver || '미배차'}<br /><br />
+
+                {(o.payment_status || '결제대기') !== '결제완료' && (
+                  <button style={styles.btnGreen} onClick={() => payOrder(o.id)}>
+                    결제 요청
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -286,9 +318,11 @@ export default function Home() {
         <div style={styles.card}>
           <div style={styles.title}>배차 가능한 오더</div>
 
-          {orders.filter(o => o.status === '배차대기').map(o => (
+          {orders.filter(o => o.status === '배차대기' && o.payment_status === '결제완료').map(o => (
             <div key={o.id} style={styles.card}>
-              <span style={styles.badge}>배차대기</span><br /><br />
+              <span style={styles.badge}>배차대기</span>
+              <span style={{ marginLeft: 8 }}></span>
+              <span style={styles.payBadge}>결제완료</span><br /><br />
 
               <div style={styles.money}>{fmt(o.driver_amount)}</div>
               <div style={styles.route}>{o.pickup} → {o.dropoff}</div>
