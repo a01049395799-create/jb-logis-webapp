@@ -20,7 +20,7 @@ const styles = {
   btnGreen: { background: '#178a43', color: 'white', border: 0, padding: '12px 16px', borderRadius: 12, fontWeight: 700, cursor: 'pointer', marginRight: 8, marginTop: 8 },
   btnRed: { background: '#d93025', color: 'white', border: 0, padding: '12px 16px', borderRadius: 12, fontWeight: 700, cursor: 'pointer', marginRight: 8, marginTop: 8 },
   badge: { display: 'inline-block', padding: '6px 10px', borderRadius: 999, background: '#e8f1ff', color: '#0f62fe', fontWeight: 700, fontSize: 13 },
-  payBadge: { display: 'inline-block', padding: '6px 10px', borderRadius: 999, background: '#e9f7ef', color: '#178a43', fontWeight: 700, fontSize: 13 },
+  payBadge: { display: 'inline-block', padding: '6px 10px', borderRadius: 999, background: '#fff4e5', color: '#b35c00', fontWeight: 700, fontSize: 13 },
   title: { fontSize: 22, fontWeight: 800, marginBottom: 14 },
   money: { fontSize: 30, fontWeight: 900, color: '#178a43', marginBottom: 8 },
   route: { fontSize: 18, fontWeight: 800, marginBottom: 8 },
@@ -43,6 +43,7 @@ export default function Home() {
   const [pickup, setPickup] = useState('');
   const [dropoff, setDropoff] = useState('');
   const [price, setPrice] = useState('');
+  const [paymentTerms, setPaymentTerms] = useState('하차 후 즉시결제');
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
@@ -75,7 +76,6 @@ export default function Home() {
   const signUp = async () => {
     const { error } = await supabase.auth.signUp({ email, password });
     if (error) return alert(error.message);
-
     alert('회원가입 완료. 로그인해주세요.');
     setMode('login');
   };
@@ -83,7 +83,6 @@ export default function Home() {
   const login = async () => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return alert(error.message);
-
     location.reload();
   };
 
@@ -128,7 +127,9 @@ export default function Home() {
       fee,
       driver_amount: driverAmount,
       status: '배차대기',
-      payment_status: '결제대기'
+      payment_status: '미결제',
+      payment_terms: paymentTerms,
+      settlement_status: '정산대기'
     }]);
 
     if (error) return alert('오더 등록 실패: ' + error.message);
@@ -137,26 +138,20 @@ export default function Home() {
     setPickup('');
     setDropoff('');
     setPrice('');
+    setPaymentTerms('하차 후 즉시결제');
     loadOrders();
   };
 
   const payOrder = async (id) => {
-    alert(`JB LOGIS 입금 계좌 안내
-
-국민은행 123-456-7890
-예금주: JB LOGIS
-
-입금 확인 후 결제완료로 처리됩니다.
-현재 테스트 버전에서는 버튼 클릭 시 결제완료로 변경됩니다.`);
-
     const { error } = await supabase
       .from('shippers')
       .update({ payment_status: '결제완료' })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('status', '하차완료');
 
     if (error) return alert('결제 처리 실패: ' + error.message);
 
-    alert('결제완료 처리되었습니다.');
+    alert('결제완료 처리되었습니다. JB LOGIS 정산대기 상태입니다.');
     loadOrders();
   };
 
@@ -167,8 +162,7 @@ export default function Home() {
         status: '배차완료'
       })
       .eq('id', id)
-      .eq('status', '배차대기')
-      .eq('payment_status', '결제완료');
+      .eq('status', '배차대기');
 
     if (error) return alert('배차 실패: ' + error.message);
 
@@ -269,8 +263,14 @@ export default function Home() {
             <input style={styles.input} placeholder="하차지" value={dropoff} onChange={e => setDropoff(e.target.value)} />
             <input style={styles.input} placeholder="총 운임 예: 300000" value={price} onChange={e => setPrice(e.target.value)} />
 
+            <select style={styles.select} value={paymentTerms} onChange={e => setPaymentTerms(e.target.value)}>
+              <option value="하차 후 즉시결제">하차 후 즉시결제</option>
+              <option value="주정산">주정산</option>
+              <option value="월정산">월정산</option>
+            </select>
+
             <p style={styles.small}>
-              결제 원칙: 화주는 JB LOGIS로 결제하고, JB LOGIS가 기사에게 정산합니다.<br />
+              결제 원칙: 화주는 운송 완료 확인 후 JB LOGIS로 결제하고, JB LOGIS가 기사에게 정산합니다.<br />
               배차 수수료는 총 운임의 5%입니다.
             </p>
 
@@ -284,18 +284,24 @@ export default function Home() {
               <div key={o.id} style={styles.card}>
                 <span style={styles.badge}>{o.status || '배차대기'}</span>
                 <span style={{ marginLeft: 8 }}></span>
-                <span style={styles.payBadge}>{o.payment_status || '결제대기'}</span><br /><br />
+                <span style={styles.payBadge}>{o.payment_status || '미결제'}</span><br /><br />
 
                 <div style={styles.route}>{o.pickup} → {o.dropoff}</div>
                 총 운임: <b>{fmt(o.price)}</b><br />
                 JB 수수료: {fmt(o.fee)}<br />
                 기사 정산 예정액: {fmt(o.driver_amount)}<br />
+                결제조건: {o.payment_terms || '하차 후 즉시결제'}<br />
+                정산상태: {o.settlement_status || '정산대기'}<br />
                 배정 기사: {o.assigned_driver || '미배차'}<br /><br />
 
-                {(o.payment_status || '결제대기') !== '결제완료' && (
+                {o.status === '하차완료' && (o.payment_status || '미결제') !== '결제완료' && (
                   <button style={styles.btnGreen} onClick={() => payOrder(o.id)}>
-                    결제 요청
+                    결제하기
                   </button>
+                )}
+
+                {o.status !== '하차완료' && (o.payment_status || '미결제') !== '결제완료' && (
+                  <p style={styles.small}>하차완료 후 결제하기 버튼이 활성화됩니다.</p>
                 )}
               </div>
             ))}
@@ -318,18 +324,20 @@ export default function Home() {
         <div style={styles.card}>
           <div style={styles.title}>배차 가능한 오더</div>
 
-          {orders.filter(o => o.status === '배차대기' && o.payment_status === '결제완료').map(o => (
+          {orders.filter(o => o.status === '배차대기').map(o => (
             <div key={o.id} style={styles.card}>
               <span style={styles.badge}>배차대기</span>
               <span style={{ marginLeft: 8 }}></span>
-              <span style={styles.payBadge}>결제완료</span><br /><br />
+              <span style={styles.payBadge}>{o.payment_terms || '하차 후 즉시결제'}</span><br /><br />
 
               <div style={styles.money}>{fmt(o.driver_amount)}</div>
               <div style={styles.route}>{o.pickup} → {o.dropoff}</div>
 
               <div style={styles.small}>
                 총 운임: {fmt(o.price)}<br />
-                JB 수수료 5%: {fmt(o.fee)}
+                JB 수수료 5%: {fmt(o.fee)}<br />
+                결제조건: {o.payment_terms || '하차 후 즉시결제'}<br />
+                정산방식: JB LOGIS 정산
               </div>
 
               <button style={styles.btnGreen} onClick={() => takeOrder(o.id)}>
@@ -344,18 +352,22 @@ export default function Home() {
 
           {orders.filter(o => o.assigned_driver === profile.name).map(o => (
             <div key={o.id} style={styles.card}>
-              <span style={styles.badge}>{o.status || '배차완료'}</span><br /><br />
+              <span style={styles.badge}>{o.status || '배차완료'}</span>
+              <span style={{ marginLeft: 8 }}></span>
+              <span style={styles.payBadge}>{o.payment_status || '미결제'}</span><br /><br />
 
               <div style={styles.money}>{fmt(o.driver_amount)}</div>
               <div style={styles.route}>{o.pickup} → {o.dropoff}</div>
 
               <div style={styles.small}>
                 총 운임: {fmt(o.price)}<br />
-                JB 수수료 5%: {fmt(o.fee)}
+                JB 수수료 5%: {fmt(o.fee)}<br />
+                결제조건: {o.payment_terms || '하차 후 즉시결제'}<br />
+                정산상태: {o.settlement_status || '정산대기'}
               </div>
 
               <button style={styles.btn} onClick={() => updateStatus(o.id, '운행중')}>운행중</button>
-              <button style={styles.btnGreen} onClick={() => updateStatus(o.id, '하차완료')}>완료</button>
+              <button style={styles.btnGreen} onClick={() => updateStatus(o.id, '하차완료')}>하차완료</button>
               <button style={styles.btnRed} onClick={() => updateStatus(o.id, '배차취소')}>취소</button>
             </div>
           ))}
